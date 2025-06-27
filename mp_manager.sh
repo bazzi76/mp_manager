@@ -56,7 +56,7 @@ function set_relay {
   # Attivando la variabile sopora, si usa indici da 1 a 8
   local coil=$num
   if [[ $coil -lt 0 || $coil -gt 7 ]]; then
-    echo "❗ Relè invalido: $num (scegli da 0 a 7)"
+    echo -e "${RED} Relè invalido: $num (scegli da 0 a 7)${RESET}"
     exit 1
   fi
   local val=$( [[ $action == "on" ]] && echo 1 || echo 0 )
