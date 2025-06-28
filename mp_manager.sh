@@ -1,5 +1,9 @@
 #!/bin/bash
 #
+
+# Author Giacomo Mattei <giacomo.mattei@grupposimtel.com>
+# Date 2025-06-28
+# Version 1.0
 # mp_manager.sh – gestione relè o ingressi digitali Modbus TCP
 # Uso:
 #   ./mp_manager.sh status         # leggi relè (default)
@@ -31,6 +35,7 @@ command -v modpoll >/dev/null 2>&1 || {
 
 OFFSET_FLAG="-0"  # zero-based
 PORT_FLAG="-p $PORT"
+ALL_RELAYS=255
 
 # coil base per relè e ingressi digitali (da configurare se diverso)
 COIL_OFFSET_RELAYS=${COIL_OFFSET_RELAYS:-0}
@@ -48,10 +53,11 @@ function status_inputs {
 }
 
 function set_relay {
+  echo "parametri= $@"
   local num=$1 action=$2
   local coil=$((COIL_OFFSET_RELAYS + num))
   if [[ $num -lt 0 || $num -gt 7 ]]; then
-    echo "❗ Relè invalido: $num (scegli 0‑7)"
+    echo -e "${RED} Relè invalido: $num (scegli 0‑7)${RESET}"
     exit 1
   fi
   local val=$([[ $action == "on" ]] && echo 1 || echo 0)
@@ -65,7 +71,7 @@ function set_all_relays {
   local val=$([[ $action == "on" ]] && echo 1 || echo 0)
   echo "Valore= $val"
   echo -e "${GREEN} Imposto TUTTI i relè → $action${RESET}"
-  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 $IP $val $val $val $val $val $val $val $val
+  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $ALL_RELAYS -c 1 -t 0 $IP $val
 }
 
 # Parsing parametri
@@ -73,15 +79,27 @@ function set_all_relays {
 #CMD="$2"
 #shift || true
 
+# controllo opzioni
+# se il primo argomento non inizia con '-', assume che sia un comando
+# altrimenti considera il primo argomento come modalità (relays o inputs)
+# e il secondo come comando
+# se il primo argomento è '-r' o '-d', cambia modalità
+# se il primo argomento è un comando, lo usa come tale
+# se il primo argomento è un comando e non è '-r' o '-d',
+# assume che sia un comando per relè (default)
+
+#debug
+echo "parametri= $@"
 if [[ "$1" != -* ]]; then
     MODE="relays"
     CMD="$1"
 else
     MODE="$1"
     CMD="$2"
+    
 fi
 
-# controllo opzioni opzionali
+
 while [[ "$1" == -* ]]; do
   case "$1" in
     -r) MODE="relays"; shift ;;
@@ -89,6 +107,10 @@ while [[ "$1" == -* ]]; do
     *) echo -e "${RED}Opzione sconosciuta $1${RESET}"; exit 1 ;;
   esac
 done
+
+#debug
+echo "MODE= $MODE"
+echo "CMD= $CMD"
 
 # Comandi
 case "$CMD" in
@@ -100,11 +122,11 @@ case "$CMD" in
       echo -e "${RED} Il comando '$CMD <num>' funziona solo su relè.${RESET}"
       exit 1
     fi
-    if [[ -z "$1" ]]; then
+    if [[ -z "$2" ]]; then
       echo -e "${RED} Usa: $0 on|off <relay_num>${RESET}"
       exit 1
     fi
-    set_relay "$1" "$CMD"
+    set_relay "$2" "$CMD"
     ;;
   all-on)
     if [[ "$MODE" != "relays" ]]; then
