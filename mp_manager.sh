@@ -77,6 +77,16 @@ PORT_FLAG="-p $PORT"
 ALL_RELAYS=255
 
 # coil base per relè e ingressi digitali (da configurare se diverso)
+# questo c'è perché se un giorno lo volessi rendere disponibile anche per altri dispositivi 
+# che non hanno relè o ingressi digitali a partire da 0
+# ma da un offset diverso, potrei farlo senza modificare il codice
+# per esempio se il dispositivo ha relè a partire da 10 e ingressi a partire da 20
+# potrei impostare COIL_OFFSET_RELAYS=10 e COIL_OFFSET_INPUTS=20
+# e il codice funzionerebbe comunque senza modifiche
+# se non impostato, assume 0 come default
+# se vuoi cambiare l'offset, puoi farlo nel file di configurazione mp_manager.conf
+# oppure come variabile d'ambiente prima di eseguire lo script.
+
 COIL_OFFSET_RELAYS=${COIL_OFFSET_RELAYS:-0}
 COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
 
