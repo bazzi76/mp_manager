@@ -19,7 +19,7 @@ RED="\e[31m"
 GREEN="\e[32m"
 RESET="\e[0m"
 
-# carica config
+# carica config e se non esiste mostra errore
 if [[ -f "$CONFIG_FILE" ]]; then
   source "$CONFIG_FILE"
 else
@@ -27,7 +27,7 @@ else
   exit 1
 fi
 
-# verifica modpoll
+# verifica modpoll se è nel path, altrimenti utilizza quello nel pacchetto in basse alla architettura
 command -v modpoll >/dev/null 2>&1 || {
   echo -e "${RED}Errore: 'modpoll' non trovato. Installa ed assicurati che sia in PATH.${RESET}"
   exit 1
