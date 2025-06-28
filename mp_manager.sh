@@ -28,10 +28,49 @@ else
 fi
 
 # verifica modpoll se è nel path, altrimenti utilizza quello nel pacchetto in basse alla architettura
-command -v modpoll >/dev/null 2>&1 || {
-  echo -e "${RED}Errore: 'modpoll' non trovato. Installa ed assicurati che sia in PATH.${RESET}"
-  exit 1
-}
+#command -v modpoll >/dev/null 2>&1 || {
+#  echo -e "${RED}Errore: 'modpoll' non trovato. Installa ed assicurati che sia in PATH.${RESET}"
+#  exit 1
+#}
+
+# Inizializza MODPOLL con il comando globale se esiste
+if command -v modpoll >/dev/null 2>&1; then
+    MODPOLL="modpoll"
+else
+    # Rileva architettura
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+        x86_64)
+            ARCH_DIR="x86_64-linux-gnu"
+            ;;
+        i386|i686)
+            ARCH_DIR="i686-linux-gnu"
+            ;;
+        aarch64)
+            ARCH_DIR="aarch64-linux-gnu"
+            ;;
+        armv7l)
+            ARCH_DIR="arm-linux-gnueabihf"
+            ;;
+        armv6l)
+            ARCH_DIR="armv6-rpi-linux-gnueabihf"
+            ;;
+        *)
+            echo -e "${RED}Errore: architettura non supportata ($ARCH).${RESET}"
+            exit 1
+            ;;
+    esac
+
+    # Costruisce il percorso locale
+    MODPOLL="./bin/${ARCH_DIR}/modpoll"
+
+    # Controlla che l'eseguibile esista e sia eseguibile
+    if [[ ! -x "$MODPOLL" ]]; then
+        echo -e "${RED}Errore: 'modpoll' non trovato nel PATH né in ${MODPOLL}.${RESET}"
+        exit 1
+    fi
+fi
 
 OFFSET_FLAG="-0"  # zero-based
 PORT_FLAG="-p $PORT"
@@ -44,12 +83,12 @@ COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
 # Funzioni
 function status_relays {
   echo -e "${GREEN} Stato relè (coil $COIL_OFFSET_RELAYS..$((COIL_OFFSET_RELAYS+7)))${RESET}"
-  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 -1 $IP
+  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 -1 $IP
 }
 
 function status_inputs {
   echo -e "${GREEN} Stato ingressi digitali (coil $COIL_OFFSET_INPUTS..$((COIL_OFFSET_INPUTS+7)))${RESET}"
-  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_INPUTS -c 8 -t 1 -1 $IP
+  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_INPUTS -c 8 -t 1 -1 $IP
 }
 
 function set_relay {
@@ -62,7 +101,7 @@ function set_relay {
   fi
   local val=$([[ $action == "on" ]] && echo 1 || echo 0)
   echo -e "${GREEN} Imposto relè $num → $action${RESET}"
-  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $coil -c 1 -t 0 $IP $val
+  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $coil -c 1 -t 0 $IP $val
 }
 
 function set_all_relays {
@@ -71,7 +110,7 @@ function set_all_relays {
   local val=$([[ $action == "on" ]] && echo 1 || echo 0)
   echo "Valore= $val"
   echo -e "${GREEN} Imposto TUTTI i relè → $action${RESET}"
-  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $ALL_RELAYS -c 1 -t 0 $IP $val
+  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $ALL_RELAYS -c 1 -t 0 $IP $val
 }
 
 # Parsing parametri
