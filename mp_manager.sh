@@ -1,101 +1,136 @@
 #!/bin/bash
 #
-# mp_manager.sh – gestione relè Modbus TCP via modpoll
+# mp_manager.sh – gestione relè o ingressi digitali Modbus TCP
 # Uso:
-#   ./mp_manager.sh status
-#   ./mp_manager.sh on 2        # accendi relè 2
-#   ./mp_manager.sh off 3       # spegni relè 3
-#   ./mp_manager.sh all-on
-#   ./mp_manager.sh all-off
+#   ./mp_manager.sh status         # leggi relè (default)
+#   ./mp_manager.sh status -r      # leggi relè
+#   ./mp_manager.sh status -d      # leggi ingressi digitali
+#   ./mp_manager.sh on 2           # accendi relè 2
+#   ./mp_manager.sh off 3          # spegni relè 3
+#   ./mp_manager.sh all-on         # accendi tutti relè
+#   ./mp_manager.sh all-off        # spegni tutti relè
 
-#IP="10.2.0.5"
-#PORT=502
+CONFIG_FILE="./mp_manager.conf"
 RED="\e[31m"
 GREEN="\e[32m"
 RESET="\e[0m"
 
-# Percorso del file di configurazione
-CONFIG_FILE="./mp_manager.conf"
-
-# Se esiste il file, lo carica
+# carica config
 if [[ -f "$CONFIG_FILE" ]]; then
   source "$CONFIG_FILE"
 else
-  echo -e "${RED} Errore: file di configurazione '$CONFIG_FILE' non trovato.${RESET}"
+  echo -e "${RED}Errore: file di configurazione '$CONFIG_FILE' non trovato.${RESET}"
   exit 1
 fi
 
-# Controlla che IP e PORT siano stati definiti
-if [[ -z "$IP" || -z "$PORT" ]]; then
-  echo -e "${RED} Errore: IP o PORT mancano nel file di configurazione.${RESET}"
-  exit 1
-fi
-
-
-OFFSET_FLAG="-0"
-
+# verifica modpoll
 command -v modpoll >/dev/null 2>&1 || {
-  echo -e "${RED} Errore: il comando 'modpoll' non è stato trovato. Assicurati che sia installato ed accessibile.${RESET}"
+  echo -e "${RED}Errore: 'modpoll' non trovato. Installa ed assicurati che sia in PATH.${RESET}"
   exit 1
 }
 
-# Verifica se l'IP è raggiungibile
-ping -c 1 $IP >/dev/null 2>&1 || {
-  echo -e "${RED} Errore: l'IP $IP non è raggiungibile.${RESET}"
-  exit 1
+OFFSET_FLAG="-0"  # zero-based
+PORT_FLAG="-p $PORT"
+
+# coil base per relè e ingressi digitali (da configurare se diverso)
+COIL_OFFSET_RELAYS=${COIL_OFFSET_RELAYS:-0}
+COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
+
+# Funzioni
+function status_relays {
+  echo -e "${GREEN} Stato relè (coil $COIL_OFFSET_RELAYS..$((COIL_OFFSET_RELAYS+7)))${RESET}"
+  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 -1 $IP
 }
 
-function status {
-  echo -e "${GREEN}Leggo lo stato di tutti i relè...${RESET}"
-  modpoll -m tcp -p $PORT $OFFSET_FLAG -r 0 -c 8 -t 0 -1 $IP
+function status_inputs {
+  echo -e "${GREEN} Stato ingressi digitali (coil $COIL_OFFSET_INPUTS..$((COIL_OFFSET_INPUTS+7)))${RESET}"
+  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_INPUTS -c 8 -t 1 -1 $IP
 }
 
 function set_relay {
   local num=$1 action=$2
-  #local coil=$((num-1)) <-- Modpoll usa indici da 0 a 7 per i relè
-  # Attivando la variabile sopora, si usa indici da 1 a 8
-  local coil=$num
-  if [[ $coil -lt 0 || $coil -gt 7 ]]; then
-    echo -e "${RED} Relè invalido: $num (scegli da 0 a 7)${RESET}"
+  local coil=$((COIL_OFFSET_RELAYS + num))
+  if [[ $num -lt 0 || $num -gt 7 ]]; then
+    echo "❗ Relè invalido: $num (scegli 0‑7)"
     exit 1
   fi
-  local val=$( [[ $action == "on" ]] && echo 1 || echo 0 )
-  echo -e "${GREEN}Imposto relè $num → $action${RESET}"
-  modpoll -m tcp -p $PORT $OFFSET_FLAG -r $coil -c 1 -t 0 $IP $val
+  local val=$([[ $action == "on" ]] && echo 1 || echo 0)
+  echo -e "${GREEN} Imposto relè $num → $action${RESET}"
+  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $coil -c 1 -t 0 $IP $val
 }
 
-function set_all {
+function set_all_relays {
+  echo "Parametro= $1"
   local action=$1
-  local val=$( [[ $action == "on" ]] && echo 1 || echo 0 )
-  echo -e "${GREEN}Imposto TUTTI i relè → $action${RESET}"
-  modpoll -m tcp -p $PORT $OFFSET_FLAG -r 0 -c 8 -t 0 $IP $val $val $val $val $val $val $val $val
+  local val=$([[ $action == "on" ]] && echo 1 || echo 0)
+  echo "Valore= $val"
+  echo -e "${GREEN} Imposto TUTTI i relè → $action${RESET}"
+  modpoll -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 $IP $val $val $val $val $val $val $val $val
 }
 
-case "$1" in
+# Parsing parametri
+#MODE="relays"
+#CMD="$2"
+#shift || true
+
+if [[ "$1" != -* ]]; then
+    MODE="relays"
+    CMD="$1"
+else
+    MODE="$1"
+    CMD="$2"
+fi
+
+# controllo opzioni opzionali
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -r) MODE="relays"; shift ;;
+    -d) MODE="inputs"; shift ;;
+    *) echo -e "${RED}Opzione sconosciuta $1${RESET}"; exit 1 ;;
+  esac
+done
+
+# Comandi
+case "$CMD" in
   status)
-    status
+    if [[ "$MODE" == "relays" ]]; then status_relays; else status_inputs; fi
     ;;
   on|off)
-    if [ -z "$2" ]; then
-      echo "❗ Usa: $0 on|off <relay_num>"
+    if [[ "$MODE" != "relays" ]]; then
+      echo -e "${RED} Il comando '$CMD <num>' funziona solo su relè.${RESET}"
       exit 1
     fi
-    set_relay "$2" "$1"
+    if [[ -z "$1" ]]; then
+      echo -e "${RED} Usa: $0 on|off <relay_num>${RESET}"
+      exit 1
+    fi
+    set_relay "$1" "$CMD"
     ;;
   all-on)
-    set_all on
+    if [[ "$MODE" != "relays" ]]; then
+      echo -e "${RED} Il comando '$CMD' è solo per relè.${RESET}"
+      exit 1
+    fi
+    set_all_relays "on"
     ;;
   all-off)
-    set_all off
+    if [[ "$MODE" != "relays" ]]; then
+      echo -e "${RED} Il comando '$CMD' è solo per relè.${RESET}"
+      exit 1
+    fi
+    set_all_relays "off"
     ;;
   *)
-    echo "Gestione relè Modbus TCP"
-    echo "Uso:"
-    echo "  $0 status        # leggi stato relè"
-    echo "  $0 on  <0‑7>     # accendi relè (da 0 a 7)"
-    echo "  $0 off <0‑7>     # spegni relè (da 0 a 7)"
-    echo "  $0 all-on        # accendi tutti"
-    echo "  $0 all-off       # spegni tutti"
+    echo "Uso: $0 [-r|-d] comando [arg]"
+    echo "  -r : operazioni su relè (default)"
+    echo "  -d : lettura ingressi digitali"
+    echo "Comandi possibili:"
+    echo "  status          : leggi stato relè o ingressi"
+    echo "  on <0‑7>        : accendi relè"
+    echo "  off <0‑7>       : spegni relè"
+    echo "  all-on          : accendi tutti i relè"
+    echo "  all-off         : spegni tutti i relè"
     exit 1
     ;;
 esac
+
