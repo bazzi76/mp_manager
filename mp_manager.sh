@@ -13,6 +13,7 @@
 #   ./mp_manager.sh off 3          # spegni relè 3
 #   ./mp_manager.sh all-on         # accendi tutti relè
 #   ./mp_manager.sh all-off        # spegni tutti relè
+#   LAST UPDATE 23-02-2026 G.Mattei + F.Marchini
 
 CONFIG_FILE="./mp_manager.conf"
 RED="\e[31m"
