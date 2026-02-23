@@ -93,7 +93,7 @@ COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
 # Funzioni
 function status_relays {
   echo -e "${GREEN} Stato relè (coil $COIL_OFFSET_RELAYS..$((COIL_OFFSET_RELAYS+$MAX_RELAYS)))${RESET}"
-  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 -1 $IP
+  $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c $(($MAX_RELAYS+1)) -t 0 -1 $IP
 }
 
 function status_inputs {
