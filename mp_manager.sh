@@ -107,7 +107,7 @@ function toggle_all_relays {
   # Read current relay states ($MAX_RELAYS relays starting from COIL_OFFSET_RELAYS)
   mapfile -t states < <($MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c $MAX_RELAYS -t 0 -1 $IP | grep -oE '\[[0-9]+\]:[[:space:]]*[01]' | awk '{print $NF}')
   # Loop through relays and toggle each
-  for (( i=0; i<$MAX_RELAYS; i++ )); do
+  for (( i=0; i<=$MAX_RELAYS; i++ )); do
     local coil=$((COIL_OFFSET_RELAYS + i))
     local current_state="${states[$i]}"
     local new_state=$(( ! current_state ))  # Invert state (0→1, 1→0)
