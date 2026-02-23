@@ -210,6 +210,7 @@ case "$CMD" in
       echo -e "${RED}Error: 'toggle-all' only works for relays.${RESET}"
       exit 1
     fi
+    toggle_all_relays
     ;;
   *)
     echo "Uso: $0 [-r|-d] comando [arg]"
