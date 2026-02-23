@@ -92,7 +92,7 @@ COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
 
 # Funzioni
 function status_relays {
-  echo -e "${GREEN} Stato relè (coil $COIL_OFFSET_RELAYS..$((COIL_OFFSET_RELAYS+7)))${RESET}"
+  echo -e "${GREEN} Stato relè (coil $COIL_OFFSET_RELAYS..$((COIL_OFFSET_RELAYS+$MAX_RELAYS)))${RESET}"
   $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c 8 -t 0 -1 $IP
 }
 
@@ -105,8 +105,8 @@ function set_relay {
   echo "parametri= $@"
   local num=$1 action=$2
   local coil=$((COIL_OFFSET_RELAYS + num))
-  if [[ $num -lt 0 || $num -gt 7 ]]; then
-    echo -e "${RED} Relè invalido: $num (scegli 0‑7)${RESET}"
+  if [[ $num -lt 0 || $num -gt $MAX_RELAYS ]]; then
+    echo -e "${RED} Relè invalido: $num (scegli 0‑$MAX_RELAYS)${RESET}"
     exit 1
   fi
   local val=$([[ $action == "on" ]] && echo 1 || echo 0)
@@ -197,8 +197,8 @@ case "$CMD" in
     echo "  -d : lettura ingressi digitali"
     echo "Comandi possibili:"
     echo "  status          : leggi stato relè o ingressi"
-    echo "  on <0‑7>        : accendi relè"
-    echo "  off <0‑7>       : spegni relè"
+    echo "  on <0‑$MAX_RELAYS>        : accendi relè"
+    echo "  off <0‑$MAX_RELAYS>       : spegni relè"
     echo "  all-on          : accendi tutti i relè"
     echo "  all-off         : spegni tutti i relè"
     exit 1
