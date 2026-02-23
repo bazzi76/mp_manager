@@ -101,6 +101,20 @@ function status_inputs {
   $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_INPUTS -c 8 -t 1 -1 $IP
 }
 
+function toggle_all_relays {
+  echo -e "${GREEN}Toggling all relays (ON→OFF, OFF→ON)...${RESET}"
+  # Read current relay states ($MAX_RELAYS relays starting from COIL_OFFSET_RELAYS)
+  mapfile -t states < <($MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c $MAX_RELAYS -t 0 -1 $IP | grep -oE '\[[0-9]+\]:[[:space:]]*[01]' | awk '{print $NF}')
+  # Loop through relays and toggle each
+  for (( i=0; i<$MAX_RELAYS; i++ )); do
+    local coil=$((COIL_OFFSET_RELAYS + i))
+    local current_state="${states[$i]}"
+    local new_state=$(( ! current_state ))  # Invert state (0→1, 1→0)
+    echo -e "Relay $i: $current_state → $new_state"
+    $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $coil -c 1 -t 0 $IP $new_state
+  done
+}
+
 function set_relay {
   echo "parametri= $@"
   local num=$1 action=$2
@@ -191,6 +205,12 @@ case "$CMD" in
     fi
     set_all_relays "off"
     ;;
+  toggle-all)
+    if [[ "$MODE" != "relays" ]]; then
+      echo -e "${RED}Error: 'toggle-all' only works for relays.${RESET}"
+      exit 1
+    fi
+
   *)
     echo "Uso: $0 [-r|-d] comando [arg]"
     echo "  -r : operazioni su relè (default)"
@@ -201,6 +221,7 @@ case "$CMD" in
     echo "  off <0‑$MAX_RELAYS>       : spegni relè"
     echo "  all-on          : accendi tutti i relè"
     echo "  all-off         : spegni tutti i relè"
+    echo "  toggle-all      : inverte tutti i relè (ON→OFF, OFF→ON)"
     exit 1
     ;;
 esac
