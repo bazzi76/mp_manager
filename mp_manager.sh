@@ -138,6 +138,22 @@ function set_all_relays {
   $MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $ALL_RELAYS -c 1 -t 0 $IP $val
 }
 
+function pulse_relay {
+  local num=$1
+  local duration=${2:-0.5} # Default a 0.5 secondi se non specificato
+
+  echo -e "${YELLOW} Eseguo FLAP su relè $num (durata: ${duration}s)${RESET}"
+
+  # 1. Accendi il relè
+  set_relay "$num" "on"
+
+  # 2. Attendi
+  sleep "$duration"
+
+  # 3. Spegni il relè
+  set_relay "$num" "off"
+}
+
 # Parsing parametri
 #MODE="relays"
 #CMD="$2"
@@ -213,6 +229,17 @@ case "$CMD" in
     fi
     toggle_all_relays
     ;;
+  pulse)
+    if [[ "$MODE" != "relays" ]]; then
+      echo -e "${RED} Il comando '$CMD <num> [duration]' è solo per relè.${RESET}"
+      exit 1
+    fi
+    if [[ -z "$2" ]]; then
+      echo -e "${RED} Usa: $0 pulse <relay_num> [duration]${RESET}"
+      exit 1
+    fi
+    pulse_relay "$2" "$3"
+    ;;
   *)
     echo "Uso: $0 [-r|-d] comando [arg]"
     echo "  -r : operazioni su relè (default)"
@@ -224,6 +251,7 @@ case "$CMD" in
     echo "  all-on          : accendi tutti i relè"
     echo "  all-off         : spegni tutti i relè"
     echo "  toggle-all      : inverte tutti i relè (ON→OFF, OFF→ON)"
+    echo "  pulse <num> [duration] : attiva e disattiva il relè per una durata specificata"
     exit 1
     ;;
 esac
