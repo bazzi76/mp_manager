@@ -105,7 +105,7 @@ function status_inputs {
 function toggle_all_relays {
   echo -e "${GREEN}Toggling all relays (ON→OFF, OFF→ON)...${RESET}"
   # Read current relay states ($MAX_RELAYS relays starting from COIL_OFFSET_RELAYS)
-  mapfile -t states < <($MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c $MAX_RELAYS -t 0 -1 $IP | grep -oE '\[[0-9]+\]:[[:space:]]*[01]' | awk '{print $NF}')
+  mapfile -t states < <($MODPOLL -m tcp $PORT_FLAG $OFFSET_FLAG -r $COIL_OFFSET_RELAYS -c $(($MAX_RELAYS+1)) -t 0 -1 $IP | grep -oE '\[[0-9]+\]:[[:space:]]*[01]' | awk '{print $NF}')
   # Loop through relays and toggle each
   for (( i=0; i<=$MAX_RELAYS; i++ )); do
     local coil=$((COIL_OFFSET_RELAYS + i))
