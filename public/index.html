@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MP Manager — Relay Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #0d0f11;
+      --surface:  #161a1e;
+      --border:   #2a2f35;
+      --accent:   #00e5a0;
+      --danger:   #ff4545;
+      --warn:     #ffaa00;
+      --muted:    #4a5260;
+      --text:     #d8dee8;
+      --mono:     'Share Tech Mono', monospace;
+      --sans:     'Barlow', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── header ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      border: 2px solid var(--accent);
+      border-radius: 4px;
+      display: grid;
+      place-items: center;
+    }
+    .logo-icon svg { display: block; }
+
+    .logo-text {
+      font-family: var(--mono);
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+    }
+    .logo-sub {
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* connection badge */
+    .conn-badge {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .conn-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .conn-badge.online .conn-dot  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+    .conn-badge.online            { color: var(--accent); border-color: var(--accent); }
+    .conn-badge.error .conn-dot   { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+    .conn-badge.error             { color: var(--danger); border-color: var(--danger); }
+
+    /* ── main layout ── */
+    main {
+      flex: 1;
+      padding: 32px;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* ── section title ── */
+    .section-title {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-left: 2px solid var(--accent);
+      padding-left: 10px;
+      margin-bottom: 16px;
+    }
+
+    /* ── global actions ── */
+    .global-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      padding: 9px 20px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .btn:hover  { border-color: var(--accent); color: var(--accent); }
+    .btn:active { transform: scale(0.97); }
+
+    .btn.primary  { border-color: var(--accent); color: var(--accent); }
+    .btn.danger   { border-color: var(--danger); color: var(--danger); }
+    .btn.warn     { border-color: var(--warn);   color: var(--warn);   }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── relay grid ── */
+    .relay-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .relay-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 18px 16px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: border-color .2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .relay-card::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .relay-card.on::after  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .relay-card.on         { border-color: #1e3830; }
+
+    .relay-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .relay-id {
+      font-family: var(--mono);
+      font-size: 1.1rem;
+      color: var(--muted);
+    }
+    .relay-card.on .relay-id { color: var(--accent); }
+
+    /* toggle switch */
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+      cursor: pointer;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: #222;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: background .2s, border-color .2s;
+    }
+    .toggle input:checked + .toggle-track {
+      background: #0d2a1e;
+      border-color: var(--accent);
+    }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      background: var(--muted);
+      border-radius: 50%;
+      transition: transform .2s, background .2s;
+    }
+    .toggle input:checked ~ .toggle-thumb {
+      transform: translateX(20px);
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    .relay-status {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+    .relay-card.on .relay-status { color: var(--accent); }
+
+    .relay-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-sm {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      padding: 6px 8px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .btn-sm:hover  { border-color: var(--warn); color: var(--warn); }
+    .btn-sm:active { transform: scale(0.96); }
+    .btn-sm:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* pulse input */
+    .pulse-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .pulse-input {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      width: 58px;
+      padding: 5px 8px;
+      background: #0a0c0e;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      text-align: center;
+    }
+    .pulse-input:focus { outline: none; border-color: var(--warn); }
+
+    /* ── inputs section ── */
+    .input-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .input-pill {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all .2s;
+    }
+    .input-pill.on {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #0d1f18;
+    }
+    .input-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background .2s;
+    }
+    .input-pill.on .input-dot {
+      background: var(--accent);
+      box-shadow: 0 0 5px var(--accent);
+    }
+
+    /* ── log console ── */
+    .log-box {
+      background: #080a0c;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 14px 16px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      line-height: 1.7;
+      max-height: 180px;
+      overflow-y: auto;
+      color: var(--muted);
+    }
+    .log-line { display: flex; gap: 10px; }
+    .log-time { color: #2e3540; min-width: 80px; }
+    .log-line.ok   .log-msg { color: var(--accent); }
+    .log-line.err  .log-msg { color: var(--danger); }
+    .log-line.warn .log-msg { color: var(--warn); }
+
+    /* ── toast ── */
+    #toast-container {
+      position: fixed;
+      bottom: 28px; right: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    .toast {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 10px 16px;
+      border-radius: 4px;
+      border-left: 3px solid var(--accent);
+      background: var(--surface);
+      color: var(--text);
+      animation: slideIn .2s ease, fadeOut .3s ease 2.5s forwards;
+      pointer-events: auto;
+    }
+    .toast.err { border-color: var(--danger); color: var(--danger); }
+    @keyframes slideIn  { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes fadeOut  { to   { opacity: 0; transform: translateX(10px); } }
+
+    /* ── spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── footer ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 12px 32px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      display: flex;
+      gap: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="1" y="4" width="16" height="10" rx="1.5" stroke="#00e5a0" stroke-width="1.5"/>
+        <circle cx="5" cy="9" r="1.5" fill="#00e5a0"/>
+        <circle cx="9" cy="9" r="1.5" fill="#00e5a0"/>
+        <circle cx="13" cy="9" r="1.5" fill="#00e5a0"/>
+        <line x1="5" y1="1" x2="5" y2="4" stroke="#00e5a0" stroke-width="1.5"/>
+        <line x1="13" y1="1" x2="13" y2="4" stroke="#00e5a0" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">MP MANAGER</div>
+      <div class="logo-sub">Waveshare Modbus Relay Controller</div>
+    </div>
+  </div>
+  <div class="conn-badge" id="connBadge">
+    <span class="conn-dot"></span>
+    <span id="connLabel">CONNECTING...</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Global actions -->
+  <section>
+    <div class="section-title">// azioni globali relè</div>
+    <div class="global-bar">
+      <button class="btn primary" onclick="globalAction('all-on')">
+        <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="6" y1="2" x2="6" y2="6" stroke="currentColor" stroke-width="1.5"/></svg>
+        ALL ON
+      </button>
+      <button class="btn danger" onclick="globalAction('all-off')">
+        <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.5" fill="none"/><line x1="4" y1="4" x2="8" y2="8" stroke="currentColor" stroke-width="1.5"/><line x1="8" y1="4" x2="4" y2="8" stroke="currentColor" stroke-width="1.5"/></svg>
+        ALL OFF
+      </button>
+      <button class="btn warn" onclick="globalAction('toggle-all')">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6a4 4 0 1 1 4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><polyline points="2,4 2,6 4,6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        TOGGLE ALL
+      </button>
+      <button class="btn" onclick="refreshAll()" id="btnRefresh">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M10 6a4 4 0 1 1-1.2-2.8" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><polyline points="10,2 10,5 7,5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        REFRESH
+      </button>
+    </div>
+  </section>
+
+  <!-- Relay grid -->
+  <section>
+    <div class="section-title">// relè — <span id="relayCount">—</span></div>
+    <div class="relay-grid" id="relayGrid">
+      <div style="color:var(--muted);font-family:var(--mono);font-size:.8rem">Caricamento...</div>
+    </div>
+  </section>
+
+  <!-- Digital inputs -->
+  <section>
+    <div class="section-title">// ingressi digitali</div>
+    <div class="input-grid" id="inputGrid">
+      <div style="color:var(--muted);font-family:var(--mono);font-size:.8rem">Caricamento...</div>
+    </div>
+    <div style="margin-top:10px">
+      <button class="btn" onclick="refreshInputs()">↺ aggiorna ingressi</button>
+    </div>
+  </section>
+
+  <!-- Log console -->
+  <section>
+    <div class="section-title">// log operazioni</div>
+    <div class="log-box" id="logBox"></div>
+  </section>
+
+</main>
+
+<footer>
+  <span>mp_manager.sh v1.0</span>
+  <span id="footerIp">IP: —</span>
+  <span id="footerTime">—</span>
+</footer>
+
+<div id="toast-container"></div>
+
+<script>
+  // ─── State ───
+  let relayStates = [];       // [{coil, state}]
+  let pollingTimer = null;
+  const POLL_INTERVAL = 5000; // ms
+
+  // ─── Log ───
+  function addLog(msg, type = 'ok') {
+    const box = document.getElementById('logBox');
+    const now = new Date().toLocaleTimeString('it-IT');
+    const line = document.createElement('div');
+    line.className = `log-line ${type}`;
+    line.innerHTML = `<span class="log-time">[${now}]</span><span class="log-msg">${msg}</span>`;
+    box.prepend(line);
+    // mantieni max 60 righe
+    while (box.children.length > 60) box.removeChild(box.lastChild);
+  }
+
+  // ─── Toast ───
+  function showToast(msg, err = false) {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast' + (err ? ' err' : '');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // ─── API call ───
+  async function api(path, method = 'GET') {
+    const res = await fetch(path, { method });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // ─── Connection badge ───
+  function setConn(state) {
+    const badge = document.getElementById('connBadge');
+    const label = document.getElementById('connLabel');
+    badge.className = 'conn-badge ' + state;
+    label.textContent = state === 'online' ? 'ONLINE' : state === 'error' ? 'OFFLINE' : 'CONNECTING...';
+  }
+
+  // ─── Render relay grid ───
+  function renderRelays(relays) {
+    const grid = document.getElementById('relayGrid');
+    document.getElementById('relayCount').textContent = `${relays.length} canali`;
+
+    // Prima iterazione: aggiorna se le card esistono già, altrimenti ricostruisce
+    if (grid.children.length === relays.length && !grid.querySelector('div[style]')) {
+      // update in-place
+      relays.forEach((r, i) => {
+        const card = grid.children[i];
+        const isOn = r.state === 1;
+        card.className = 'relay-card' + (isOn ? ' on' : '');
+        card.querySelector('.relay-status').textContent = isOn ? '● ATTIVO' : '○ SPENTO';
+        const chk = card.querySelector('input[type=checkbox]');
+        chk.checked = isOn;
+      });
+      return;
+    }
+
+    // Costruzione completa
+    grid.innerHTML = '';
+    relays.forEach((r) => {
+      const isOn = r.state === 1;
+      const card = document.createElement('div');
+      card.className = 'relay-card' + (isOn ? ' on' : '');
+      card.dataset.coil = r.coil;
+      card.innerHTML = `
+        <div class="relay-header">
+          <span class="relay-id">REL_${String(r.coil).padStart(2,'0')}</span>
+          <label class="toggle">
+            <input type="checkbox" ${isOn ? 'checked' : ''} onchange="toggleRelay(${r.coil}, this.checked)">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </label>
+        </div>
+        <div class="relay-status">${isOn ? '● ATTIVO' : '○ SPENTO'}</div>
+        <div class="relay-actions">
+          <button class="btn-sm" onclick="setRelay(${r.coil},'on')" title="Accendi">
+            <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="5" y1="1.5" x2="5" y2="5" stroke="currentColor" stroke-width="1.3"/></svg> ON
+          </button>
+          <button class="btn-sm" onclick="setRelay(${r.coil},'off')" title="Spegni">
+            <svg width="10" height="10" viewBox="0 0 10 10"><line x1="3" y1="3" x2="7" y2="7" stroke="currentColor" stroke-width="1.3"/><line x1="7" y1="3" x2="3" y2="7" stroke="currentColor" stroke-width="1.3"/></svg> OFF
+          </button>
+        </div>
+        <div class="pulse-row">
+          <input class="pulse-input" type="number" value="0.5" min="0.1" max="60" step="0.1" id="pulse-dur-${r.coil}" title="Durata pulse (s)" />
+          <button class="btn-sm" style="flex:2" onclick="pulseRelay(${r.coil})" title="Pulse">
+            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1,5 3,2 5,8 7,2 9,5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg> PULSE
+          </button>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // ─── Render digital inputs ───
+  function renderInputs(inputs) {
+    const grid = document.getElementById('inputGrid');
+    grid.innerHTML = '';
+    if (!inputs.length) {
+      grid.innerHTML = '<span style="color:var(--muted);font-family:var(--mono);font-size:.75rem">Nessun ingresso rilevato</span>';
+      return;
+    }
+    inputs.forEach((inp) => {
+      const pill = document.createElement('div');
+      pill.className = 'input-pill' + (inp.state ? ' on' : '');
+      pill.innerHTML = `<span class="input-dot"></span>IN_${String(inp.coil).padStart(2,'0')} : ${inp.state ? 'HIGH' : 'LOW'}`;
+      grid.appendChild(pill);
+    });
+  }
+
+  // ─── Actions ───
+  async function refreshRelays() {
+    try {
+      const data = await api('/api/status/relays');
+      if (data.ok) {
+        relayStates = data.relays;
+        renderRelays(data.relays);
+        setConn('online');
+        document.getElementById('footerTime').textContent = 'Aggiornato: ' + new Date().toLocaleTimeString('it-IT');
+      }
+    } catch (e) {
+      setConn('error');
+      addLog('Errore lettura relè: ' + e.message, 'err');
+    }
+  }
+
+  async function refreshInputs() {
+    try {
+      const data = await api('/api/status/inputs');
+      if (data.ok) renderInputs(data.inputs);
+    } catch (e) {
+      addLog('Errore lettura ingressi: ' + e.message, 'err');
+    }
+  }
+
+  async function refreshAll() {
+    const btn = document.getElementById('btnRefresh');
+    btn.disabled = true;
+    await refreshRelays();
+    await refreshInputs();
+    btn.disabled = false;
+  }
+
+  async function toggleRelay(coil, state) {
+    await setRelay(coil, state ? 'on' : 'off');
+  }
+
+  async function setRelay(coil, action) {
+    try {
+      const data = await api(`/api/relay/${coil}/${action}`, 'POST');
+      if (data.ok) {
+        addLog(`Relè ${coil} → ${action.toUpperCase()}`, 'ok');
+        showToast(`REL_${String(coil).padStart(2,'0')} → ${action.toUpperCase()}`);
+        await refreshRelays();
+      }
+    } catch (e) {
+      addLog(`Errore relè ${coil}: ${e.message}`, 'err');
+      showToast('Errore: ' + e.message, true);
+    }
+  }
+
+  async function pulseRelay(coil) {
+    const dur = parseFloat(document.getElementById(`pulse-dur-${coil}`).value) || 0.5;
+    try {
+      const data = await api(`/api/relay/${coil}/pulse?duration=${dur}`, 'POST');
+      if (data.ok) {
+        addLog(`Pulse relè ${coil} (${dur}s)`, 'warn');
+        showToast(`PULSE REL_${String(coil).padStart(2,'0')} — ${dur}s`);
+        await refreshRelays();
+      }
+    } catch (e) {
+      addLog(`Errore pulse relè ${coil}: ${e.message}`, 'err');
+      showToast('Errore: ' + e.message, true);
+    }
+  }
+
+  async function globalAction(action) {
+    try {
+      const data = await api(`/api/relays/${action}`, 'POST');
+      if (data.ok) {
+        addLog(`Azione globale: ${action}`, 'ok');
+        showToast(action.toUpperCase());
+        await refreshRelays();
+      }
+    } catch (e) {
+      addLog(`Errore azione globale: ${e.message}`, 'err');
+      showToast('Errore: ' + e.message, true);
+    }
+  }
+
+  // ─── Polling ───
+  function startPolling() {
+    clearInterval(pollingTimer);
+    pollingTimer = setInterval(refreshRelays, POLL_INTERVAL);
+  }
+
+  // ─── Init ───
+  (async () => {
+    addLog('Inizializzazione interfaccia...', 'warn');
+    await refreshAll();
+    addLog('Pronto.', 'ok');
+    startPolling();
+  })();
+</script>
+
+</body>
+</html>

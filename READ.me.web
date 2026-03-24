@@ -1,0 +1,88 @@
+# mp-manager-web
+
+Interfaccia web per pilotare dispositivi Waveshare Modbus TCP Relay tramite `mp_manager.sh`.
+
+## Struttura
+
+```
+mp_web/
+├── server.js          ← backend Node.js/Express
+├── package.json
+├── mp_manager.sh      ← copia qui il tuo script (o configura MP_MANAGER_PATH)
+├── mp_manager.conf    ← copia qui il tuo file di config
+└── public/
+    └── index.html     ← frontend web
+```
+
+## Requisiti
+
+- Node.js >= 18
+- `mp_manager.sh` e `mp_manager.conf` presenti nella stessa cartella di `server.js`
+- `modpoll` installato o presente in `./bin/<arch>/modpoll` (come da script)
+
+## Installazione
+
+```bash
+cd mp_web
+npm install
+```
+
+## Avvio
+
+```bash
+node server.js
+```
+
+La UI sarà disponibile su: **http://localhost:3000**
+
+## Variabili d'ambiente
+
+| Variabile           | Default                        | Descrizione                              |
+|---------------------|--------------------------------|------------------------------------------|
+| `PORT`              | `3000`                         | Porta HTTP del server                    |
+| `MP_MANAGER_PATH`   | `./mp_manager.sh`              | Percorso assoluto allo script bash       |
+
+Esempio con percorso personalizzato:
+
+```bash
+MP_MANAGER_PATH=/opt/modbus/mp_manager.sh PORT=8080 node server.js
+```
+
+## API REST esposte
+
+| Metodo | Path                          | Descrizione                    |
+|--------|-------------------------------|--------------------------------|
+| GET    | `/api/status/relays`          | Stato tutti i relè             |
+| GET    | `/api/status/inputs`          | Stato ingressi digitali        |
+| POST   | `/api/relay/:num/on`          | Accendi relè N                 |
+| POST   | `/api/relay/:num/off`         | Spegni relè N                  |
+| POST   | `/api/relay/:num/pulse?duration=0.5` | Pulse relè N (secondi) |
+| POST   | `/api/relays/all-on`          | Accendi tutti i relè           |
+| POST   | `/api/relays/all-off`         | Spegni tutti i relè            |
+| POST   | `/api/relays/toggle-all`      | Inverti tutti i relè           |
+
+## Avvio automatico con systemd (opzionale)
+
+Crea `/etc/systemd/system/mp-manager-web.service`:
+
+```ini
+[Unit]
+Description=MP Manager Web UI
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/mp_web
+ExecStart=/usr/bin/node /opt/mp_web/server.js
+Restart=always
+User=pi
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Poi:
+```bash
+sudo systemctl enable mp-manager-web
+sudo systemctl start mp-manager-web
+```

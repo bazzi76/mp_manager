@@ -1,2 +1,5 @@
 oldstuff/
 test.sh
+#Node
+node_modules/
+mp_manager.conf

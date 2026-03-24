@@ -169,23 +169,36 @@ function pulse_relay {
 # assume che sia un comando per relè (default)
 
 #debug
-echo "parametri= $@"
-if [[ "$1" != -* ]]; then
-    MODE="relays"
-    CMD="$1"
-else
-    MODE="$1"
-    CMD="$2"
-    
-fi
+#echo "parametri= $@"
+##if [[ "$1" != -* ]]; then
+#    MODE="relays"
+#    CMD="$1"
+#else
+#    MODE="$1"
+#    CMD="$2"
+#    
+#fi
 
 
-while [[ "$1" == -* ]]; do
-  case "$1" in
-    -r) MODE="relays"; shift ;;
-    -d) MODE="inputs"; shift ;;
-    *) echo -e "${RED}Opzione sconosciuta $1${RESET}"; exit 1 ;;
-  esac
+#while [[ "$1" == -* ]]; do
+#  case "$1" in
+#    -r) MODE="relays"; shift ;;
+#    -d) MODE="inputs"; shift ;;
+#    *) echo -e "${RED}Opzione sconosciuta $1${RESET}"; exit 1 ;;
+#  esac
+#done
+#
+#Parsing Parametri
+#
+MODE="relays"
+CMD=""
+
+for arg in "$@"; do
+    case "$arg" in
+        -r) MODE="relays" ;;
+        -d) MODE="inputs" ;;
+        *)  [[ -z "$CMD" ]] && CMD="$arg" ;;
+    esac
 done
 
 #debug
