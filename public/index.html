@@ -349,6 +349,42 @@
     .log-line.err  .log-msg { color: var(--danger); }
     .log-line.warn .log-msg { color: var(--warn); }
 
+    /* ── mode selector ── */
+    .mode-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mode-label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      min-width: 36px;
+    }
+    .mode-select {
+      flex: 1;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 5px 8px;
+      background: #0a0c0e;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%234a5260'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 24px;
+      transition: border-color .15s;
+    }
+    .mode-select:focus    { outline: none; border-color: var(--accent); }
+    .mode-select.linkage  { border-color: var(--warn); color: var(--warn); }
+    .mode-select.flash    { border-color: #a78bfa; color: #a78bfa; }
+    .btn-sm.apply:hover   { border-color: var(--accent); color: var(--accent); }
+
     /* ── toast ── */
     #toast-container {
       position: fixed;
@@ -577,6 +613,16 @@
             <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1,5 3,2 5,8 7,2 9,5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg> PULSE
           </button>
         </div>
+        <div class="mode-row">
+          <span class="mode-label">MODE</span>
+          <select class="mode-select" id="mode-sel-${r.coil}" onchange="onModeSelectChange(${r.coil})">
+            <option value="0">Normal</option>
+            <option value="1">Linkage</option>
+            <option value="2">FlashON</option>
+            <option value="3">FlashOFF</option>
+          </select>
+          <button class="btn-sm apply" onclick="applyMode(${r.coil})" title="Applica modalità">✓</button>
+        </div>
       `;
       grid.appendChild(card);
     });
@@ -678,6 +724,56 @@
     }
   }
 
+  // ─── Mode management ───
+  const MODE_CLASSES = ['', 'linkage', 'flash', 'flash'];
+
+  function onModeSelectChange(coil) {
+    const sel = document.getElementById(`mode-sel-${coil}`);
+    sel.className = 'mode-select ' + (MODE_CLASSES[parseInt(sel.value)] || '');
+  }
+
+  async function applyMode(coil) {
+    const sel = document.getElementById(`mode-sel-${coil}`);
+    const mode = parseInt(sel.value);
+    const modeNames = ['Normal', 'Linkage', 'FlashON', 'FlashOFF'];
+    try {
+      const data = await api(`/api/relay/${coil}/mode/${mode}`, 'POST');
+      if (data.ok) {
+        addLog(`Relè ${coil} modalità → ${modeNames[mode]}`, mode === 1 ? 'warn' : 'ok');
+        showToast(`REL_${String(coil).padStart(2,'0')} → ${modeNames[mode]}`);
+        // In modalità Linkage avvisa che i comandi ON/OFF sono disabilitati
+        if (mode === 1) {
+          addLog(`⚠ Relè ${coil} in Linkage: comandi ON/OFF ignorati dal dispositivo`, 'warn');
+        }
+      }
+    } catch (e) {
+      addLog(`Errore set-mode relè ${coil}: ${e.message}`, 'err');
+      showToast('Errore: ' + e.message, true);
+    }
+  }
+
+  async function refreshModes() {
+    try {
+      // Legge le modalità di tutti i relè visibili in parallelo
+      const cards = document.querySelectorAll('.relay-card');
+      const promises = Array.from(cards).map(card => {
+        const coil = parseInt(card.dataset.coil);
+        return api(`/api/relay/${coil}/mode`).then(data => ({ coil, data })).catch(() => null);
+      });
+      const results = await Promise.all(promises);
+      results.forEach(r => {
+        if (!r || !r.data.ok) return;
+        const sel = document.getElementById(`mode-sel-${r.coil}`);
+        if (sel) {
+          sel.value = r.data.mode;
+          sel.className = 'mode-select ' + (MODE_CLASSES[r.data.mode] || '');
+        }
+      });
+    } catch (e) {
+      addLog('Errore lettura modalità: ' + e.message, 'err');
+    }
+  }
+
   // ─── Polling ───
   function startPolling() {
     clearInterval(pollingTimer);
@@ -688,6 +784,7 @@
   (async () => {
     addLog('Inizializzazione interfaccia...', 'warn');
     await refreshAll();
+    await refreshModes();
     addLog('Pronto.', 'ok');
     startPolling();
   })();
@@ -695,3 +792,4 @@
 
 </body>
 </html>
+

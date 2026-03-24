@@ -158,8 +158,65 @@ app.post("/api/relays/toggle-all", async (req, res) => {
   }
 });
 
+// GET /api/relay/:num/mode — leggi modalità relè N
+// Risposta: { ok, relay, mode: 0-3, modeName: "Normal"|"Linkage"|"FlashON"|"FlashOFF" }
+app.get("/api/relay/:num/mode", async (req, res) => {
+  const num = parseInt(req.params.num);
+  if (isNaN(num) || num < 0) return res.status(400).json({ ok: false, error: "Numero relè non valido" });
+  try {
+    const result = await runScript(["get-mode", String(num)]);
+    // Output modpoll per holding register: "[4096]: 1" oppure "[4096]:  1"
+    const match = result.stdout.match(/\[\d+\]:\s*(\d+)/);
+    if (!match) return res.status(502).json({ ok: false, error: "Nessuna risposta dal dispositivo", raw: result.stdout });
+    const mode = parseInt(match[1]);
+    const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+    res.json({ ok: true, relay: num, mode, modeName: modeNames[mode] ?? "Unknown", raw: result.stdout });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/relay/:num/mode/:value — imposta modalità relè N
+// :value = 0 (Normal) | 1 (Linkage) | 2 (FlashON) | 3 (FlashOFF)
+app.post("/api/relay/:num/mode/:value", async (req, res) => {
+  const num   = parseInt(req.params.num);
+  const value = parseInt(req.params.value);
+  if (isNaN(num)   || num   < 0)        return res.status(400).json({ ok: false, error: "Numero relè non valido" });
+  if (isNaN(value) || value < 0 || value > 3) return res.status(400).json({ ok: false, error: "Modalità non valida (0-3)" });
+  try {
+    const result = await runScript(["set-mode", String(num), String(value)]);
+    const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+    res.json({ ok: true, relay: num, mode: value, modeName: modeNames[value], raw: result.stdout });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/relays/modes — leggi modalità di tutti i relè in una sola chiamata
+app.get("/api/relays/modes", async (req, res) => {
+  const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+  try {
+    // Leggiamo i MAX_RELAYS+1 registri in parallelo
+    // Non sappiamo MAX_RELAYS qui, usiamo la conf — leggiamo fino a 16 e filtriamo
+    // In alternativa leggiamo uno per uno con Promise.all dal frontend
+    // Per semplicità eseguiamo get-mode per ogni relay 0-15 in parallelo
+    const promises = Array.from({ length: 16 }, (_, i) =>
+      runScript(["get-mode", String(i)]).then(result => {
+        const match = result.stdout.match(/\[\d+\]:\s*(\d+)/);
+        const mode = match ? parseInt(match[1]) : null;
+        return { relay: i, mode, modeName: mode !== null ? (modeNames[mode] ?? "Unknown") : null, error: match ? null : "no response" };
+      })
+    );
+    const modes = await Promise.all(promises);
+    res.json({ ok: true, modes });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ---------- avvio ----------
 app.listen(PORT, () => {
   console.log(`mp-manager-web in ascolto su http://localhost:${PORT}`);
   console.log(`Script: ${MP_SCRIPT}`);
 });
+

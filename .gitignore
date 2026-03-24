@@ -3,3 +3,7 @@ test.sh
 #Node
 node_modules/
 mp_manager.conf
+mp_manager.old
+mp_manager.sh.add
+server.js.old
+public/index.html.old
