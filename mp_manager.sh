@@ -13,7 +13,7 @@
 #   ./mp_manager.sh off 3          # spegni relè 3
 #   ./mp_manager.sh all-on         # accendi tutti relè
 #   ./mp_manager.sh all-off        # spegni tutti relè
-#   ./mp_manager.sh get-mode 2     # leggi modalità relè 2 (0=Normal,1=Linkage,2=FlashON,3=FlashOFF)
+#   ./mp_manager.sh get-mode 2     # leggi modalità relè 2 (0=Normal,1=Linkage,2=Toggle,3=Trigger)
 #   ./mp_manager.sh set-mode 2 1   # imposta modalità relè 2 → Linkage
 #   LAST UPDATE 24-03-2026 G.Mattei
 
@@ -72,7 +72,7 @@ COIL_OFFSET_INPUTS=${COIL_OFFSET_INPUTS:-0}
 MODE_REG_BASE=${MODE_REG_BASE:-4096}
 
 # Nomi modalità per output leggibile
-MODE_NAMES=("Normal" "Linkage" "FlashON" "FlashOFF")
+MODE_NAMES=("Normal" "Linkage" "Toggle" "Trigger")
 
 # ---------- Funzioni ----------
 
@@ -142,14 +142,14 @@ function get_mode {
 
 function set_mode {
   # Imposta la modalità operativa di un relè (registro holding 4x, FC6)
-  # Valori: 0=Normal, 1=Linkage, 2=FlashON, 3=FlashOFF
+  # Valori: 0=Normal, 1=Linkage, 2=Toggle, 3=Trigger
   local num=$1 mode=$2
   if [[ $num -lt 0 || $num -gt $MAX_RELAYS ]]; then
     echo -e "${RED} Relè invalido: $num (scegli 0‑$MAX_RELAYS)${RESET}"
     exit 1
   fi
   if [[ $mode -lt 0 || $mode -gt 3 ]]; then
-    echo -e "${RED} Modalità non valida: $mode (0=Normal, 1=Linkage, 2=FlashON, 3=FlashOFF)${RESET}"
+    echo -e "${RED} Modalità non valida: $mode (0=Normal, 1=Linkage, 2=Toggle, 3=Trigger)${RESET}"
     exit 1
   fi
   local reg=$((MODE_REG_BASE + num))
@@ -242,8 +242,8 @@ case "$CMD" in
       echo -e "${RED} Usa: $0 set-mode <relay_num> <0-3>${RESET}"
       echo -e "  0 = Normal   (controllo via comando Modbus)"
       echo -e "  1 = Linkage  (segue ingresso digitale corrispondente)"
-      echo -e "  2 = FlashON  (accensione temporizzata)"
-      echo -e "  3 = FlashOFF (spegnimento temporizzato)"
+      echo -e "  2 = Toggle  (Relé cambia stato quando ingresso digitale viene attivato)"
+      echo -e "  3 = Trigger (Relé cambia stato quando ingresso digitale corrispondente cambia stato)"
       exit 1
     fi
     set_mode "${ARGS[0]}" "${ARGS[1]}"
@@ -267,8 +267,8 @@ case "$CMD" in
     echo "  set-mode <num> <0-3>         : imposta modalità relè"
     echo "    0 = Normal   (controllo Modbus)"
     echo "    1 = Linkage  (segue ingresso digitale)"
-    echo "    2 = FlashON  (accensione temporizzata)"
-    echo "    3 = FlashOFF (spegnimento temporizzato)"
+    echo "    2 = Toggle  (Relé cambia stato quando ingresso digitale viene attivato)"
+    echo "    3 = Trigger (Relé cambia stato quando ingresso digitale corrispondente cambia stato)"
     exit 1
     ;;
 esac

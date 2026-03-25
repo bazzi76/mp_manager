@@ -618,8 +618,8 @@
           <select class="mode-select" id="mode-sel-${r.coil}" onchange="onModeSelectChange(${r.coil})">
             <option value="0">Normal</option>
             <option value="1">Linkage</option>
-            <option value="2">FlashON</option>
-            <option value="3">FlashOFF</option>
+            <option value="2">Toggle</option>
+            <option value="3">Trigger</option>
           </select>
           <button class="btn-sm apply" onclick="applyMode(${r.coil})" title="Applica modalità">✓</button>
         </div>
@@ -735,7 +735,7 @@
   async function applyMode(coil) {
     const sel = document.getElementById(`mode-sel-${coil}`);
     const mode = parseInt(sel.value);
-    const modeNames = ['Normal', 'Linkage', 'FlashON', 'FlashOFF'];
+    const modeNames = ['Normal', 'Linkage', 'Toggle', 'Trigger'];
     try {
       const data = await api(`/api/relay/${coil}/mode/${mode}`, 'POST');
       if (data.ok) {

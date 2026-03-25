@@ -159,7 +159,7 @@ app.post("/api/relays/toggle-all", async (req, res) => {
 });
 
 // GET /api/relay/:num/mode — leggi modalità relè N
-// Risposta: { ok, relay, mode: 0-3, modeName: "Normal"|"Linkage"|"FlashON"|"FlashOFF" }
+// Risposta: { ok, relay, mode: 0-3, modeName: "Normal"|"Linkage"|"Toggle"|"Trigger" }
 app.get("/api/relay/:num/mode", async (req, res) => {
   const num = parseInt(req.params.num);
   if (isNaN(num) || num < 0) return res.status(400).json({ ok: false, error: "Numero relè non valido" });
@@ -169,7 +169,7 @@ app.get("/api/relay/:num/mode", async (req, res) => {
     const match = result.stdout.match(/\[\d+\]:\s*(\d+)/);
     if (!match) return res.status(502).json({ ok: false, error: "Nessuna risposta dal dispositivo", raw: result.stdout });
     const mode = parseInt(match[1]);
-    const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+    const modeNames = ["Normal", "Linkage", "Toggle", "Trigger"];
     res.json({ ok: true, relay: num, mode, modeName: modeNames[mode] ?? "Unknown", raw: result.stdout });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -177,7 +177,7 @@ app.get("/api/relay/:num/mode", async (req, res) => {
 });
 
 // POST /api/relay/:num/mode/:value — imposta modalità relè N
-// :value = 0 (Normal) | 1 (Linkage) | 2 (FlashON) | 3 (FlashOFF)
+// :value = 0 (Normal) | 1 (Linkage) | 2 (Toggle) | 3 (Trigger)
 app.post("/api/relay/:num/mode/:value", async (req, res) => {
   const num   = parseInt(req.params.num);
   const value = parseInt(req.params.value);
@@ -185,7 +185,7 @@ app.post("/api/relay/:num/mode/:value", async (req, res) => {
   if (isNaN(value) || value < 0 || value > 3) return res.status(400).json({ ok: false, error: "Modalità non valida (0-3)" });
   try {
     const result = await runScript(["set-mode", String(num), String(value)]);
-    const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+    const modeNames = ["Normal", "Linkage", "Toggle", "Trigger"];
     res.json({ ok: true, relay: num, mode: value, modeName: modeNames[value], raw: result.stdout });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -194,7 +194,7 @@ app.post("/api/relay/:num/mode/:value", async (req, res) => {
 
 // GET /api/relays/modes — leggi modalità di tutti i relè in una sola chiamata
 app.get("/api/relays/modes", async (req, res) => {
-  const modeNames = ["Normal", "Linkage", "FlashON", "FlashOFF"];
+  const modeNames = ["Normal", "Linkage", "Toggle", "Trigger"];
   try {
     // Leggiamo i MAX_RELAYS+1 registri in parallelo
     // Non sappiamo MAX_RELAYS qui, usiamo la conf — leggiamo fino a 16 e filtriamo
