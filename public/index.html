@@ -495,12 +495,9 @@
 
   <!-- Digital inputs -->
   <section>
-    <div class="section-title">// ingressi digitali</div>
+    <div class="section-title">// ingressi digitali <span style="font-size:0.6rem;color:var(--muted)">— aggiornamento automatico ogni <span id="pollSecs">5</span>s</span></div>
     <div class="input-grid" id="inputGrid">
       <div style="color:var(--muted);font-family:var(--mono);font-size:.8rem">Caricamento...</div>
-    </div>
-    <div style="margin-top:10px">
-      <button class="btn" onclick="refreshInputs()">↺ aggiorna ingressi</button>
     </div>
   </section>
 
@@ -525,6 +522,9 @@
   let relayStates = [];       // [{coil, state}]
   let pollingTimer = null;
   const POLL_INTERVAL = 5000; // ms
+
+  // Aggiorna il numero di secondi mostrato nel titolo ingressi
+  document.getElementById('pollSecs').textContent = POLL_INTERVAL / 1000;
 
   // ─── Log ───
   function addLog(msg, type = 'ok') {
@@ -775,9 +775,16 @@
   }
 
   // ─── Polling ───
+  // Aggiorna relè, ingressi digitali e modalità ad ogni ciclo
+  async function pollCycle() {
+    await refreshRelays();
+    await refreshInputs();
+    await refreshModes();
+  }
+
   function startPolling() {
     clearInterval(pollingTimer);
-    pollingTimer = setInterval(refreshRelays, POLL_INTERVAL);
+    pollingTimer = setInterval(pollCycle, POLL_INTERVAL);
   }
 
   // ─── Init ───
