@@ -37,7 +37,9 @@ function runScript(args = []) {
   });
 
   const cmd = `bash "${MP_SCRIPT}" ${safeArgs.join(" ")}`;
-  console.log(`[exec] ${cmd}`);
+//  console.log(`[exec] ${cmd}`);
+const isReadOnly = args[0] === 'status' || args[0] === 'get-mode';
+if (!isReadOnly) console.log(`[exec] ${cmd}`);
 
   return new Promise((resolve) => {
     exec(cmd, { timeout: 10000 }, (err, stdout, stderr) => {
