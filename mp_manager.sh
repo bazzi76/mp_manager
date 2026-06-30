@@ -17,7 +17,9 @@
 #   ./mp_manager.sh set-mode 2 1   # imposta modalità relè 2 → Linkage
 #   LAST UPDATE 24-03-2026 G.Mattei
 
-CONFIG_FILE="./mp_manager.conf"
+#CONFIG_FILE="./mp_manager.conf"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/mp_manager.conf"
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -50,7 +52,7 @@ else
             ;;
     esac
 
-    MODPOLL="./bin/${ARCH_DIR}/modpoll"
+    MODPOLL="$SCRIPT_DIR/bin/${ARCH_DIR}/modpoll"
 
     if [[ ! -x "$MODPOLL" ]]; then
         echo -e "${RED}Errore: 'modpoll' non trovato nel PATH né in ${MODPOLL}.${RESET}"
