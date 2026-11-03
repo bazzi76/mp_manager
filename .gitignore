@@ -1,3 +1,7 @@
+CONTEXT.md
+#Python (Windows addon)
+__pycache__/
+*.pyc
 oldstuff/
 test.sh
 #Node
