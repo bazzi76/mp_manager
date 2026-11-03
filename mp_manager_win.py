@@ -95,7 +95,10 @@ class RelayApp:
         self.client = None
         self.relay_states = [None] * self.num_relays
         self.auto_refresh = tk.BooleanVar(value=False)
+        self.pulse_mode = tk.BooleanVar(value=False)
+        self.pulse_duration = tk.StringVar(value="2.0")
         self._refresh_job = None
+        self._pulsing = set()  # relè attualmente in pulse (bottoni disabilitati)
 
         self._build_ui()
 
@@ -157,7 +160,7 @@ class RelayApp:
                 relief="flat",
                 bd=0,
                 highlightthickness=0,
-                command=lambda n=i: self._toggle_relay(n),
+                command=lambda n=i: self._handle_relay_click(n),
             )
             btn.grid(row=r, column=c, padx=4, pady=4)
             self.relay_buttons.append(btn)
@@ -171,6 +174,13 @@ class RelayApp:
         ttk.Checkbutton(bottom, text="Auto-refresh (2s)",
                         variable=self.auto_refresh,
                         command=self._toggle_auto_refresh).grid(row=0, column=2, padx=(20, 0))
+
+        # Pulse mode
+        ttk.Checkbutton(bottom, text="Pulse mode",
+                        variable=self.pulse_mode).grid(row=0, column=3, padx=(20, 0))
+        ttk.Label(bottom, text="Durata (s):").grid(row=0, column=4, padx=(8, 2))
+        pulse_entry = ttk.Entry(bottom, textvariable=self.pulse_duration, width=5)
+        pulse_entry.grid(row=0, column=5)
 
     # ── Modbus ────────────────────────────────────────────────────────
 
@@ -241,6 +251,65 @@ class RelayApp:
                 messagebox.showerror("Errore", f"Impossibile scrivere il relè {num}.")
         except Exception as e:
             messagebox.showerror("Errore", f"Errore scrittura relè {num}:\n{e}")
+
+    def _handle_relay_click(self, num):
+        """Gestisce il click su un relè: toggle o pulse in base alla modalità."""
+        if num in self._pulsing:
+            return  # pulse già in corso su questo relè
+        if self.pulse_mode.get():
+            self._pulse_relay(num)
+        else:
+            self._toggle_relay(num)
+
+    def _get_pulse_duration(self):
+        """Legge e valida la durata pulse dal campo di testo. Ritorna float o None."""
+        try:
+            duration = float(self.pulse_duration.get().replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Errore", "Durata pulse non valida.\nUsa un numero (es. 2.0).")
+            return None
+        if duration <= 0 or duration > 60:
+            messagebox.showerror("Errore", "Durata pulse non valida (0–60 secondi).")
+            return None
+        return duration
+
+    def _pulse_relay(self, num):
+        """Invia un pulse al relè num: ON, attende durata, OFF. Non bloccante."""
+        duration = self._get_pulse_duration()
+        if duration is None:
+            return
+        if not self.client or not self.client.is_open:
+            if not self._connect():
+                return
+        coil = self.coil_offset + num
+        try:
+            ok = self.client.write_single_coil(coil, True)
+            if not ok:
+                messagebox.showerror("Errore", f"Impossibile attivare il pulse sul relè {num}.")
+                return
+            # Stato ON + disabilita il bottone durante il pulse
+            self.relay_states[num] = True
+            self._pulsing.add(num)
+            self.relay_buttons[num].config(state="disabled", text=f"R{num}\nPULSE")
+            self._update_button_colors()
+            # Schedula lo spegnimento
+            self.root.after(int(duration * 1000),
+                            lambda: self._pulse_off(num, coil))
+        except Exception as e:
+            messagebox.showerror("Errore", f"Errore pulse relè {num}:\n{e}")
+            self._pulsing.discard(num)
+
+    def _pulse_off(self, num, coil):
+        """Seconda fase del pulse: spegne il relè e riabilita il bottone."""
+        try:
+            self.client.write_single_coil(coil, False)
+            self.relay_states[num] = False
+        except Exception:
+            pass
+        finally:
+            self._pulsing.discard(num)
+            self.relay_buttons[num].config(state="normal")
+            self._update_button_colors()
 
     def _all_on(self):
         self._write_all(True)
