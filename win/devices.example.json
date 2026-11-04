@@ -1,0 +1,30 @@
+{
+  "devices": [
+    {
+      "name": "Quadro 1",
+      "ip": "192.168.1.100",
+      "port": 502,
+      "max_relays": 7,
+      "max_in": 7,
+      "coil_offset_relays": 0,
+      "coil_offset_inputs": 0,
+      "relays": ["Luci Sala", "Pompa", "Ventilazione", "", "", "", "", ""]
+    },
+    {
+      "name": "Quadro 2",
+      "ip": "192.168.1.101",
+      "port": 502,
+      "max_relays": 7,
+      "max_in": 7,
+      "relays": []
+    },
+    {
+      "name": "Quadro 3",
+      "ip": "192.168.1.102",
+      "port": 502,
+      "max_relays": 15,
+      "max_in": 15,
+      "relays": []
+    }
+  ]
+}

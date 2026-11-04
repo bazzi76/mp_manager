@@ -3,15 +3,19 @@
 mp_manager_win.py — GUI Windows per controllo relè Waveshare Modbus TCP.
 Addon multipiattaforma di mp_manager.sh (versione Linux/bash).
 
+Supporta multipli dispositivi via file JSON (devices.json).
+Fallback a singolo dispositivo via mp_manager.conf se devices.json assente.
+
 Avvio:  python mp_manager_win.py
 Richiede:  pip install pyModbusTCP
-Config:    legge mp_manager.conf nella stessa directory dello script
+Config:    win/devices.json (multi-dispositivo) oppure win/mp_manager.conf (singolo)
 
 Autore: Giacomo Mattei <giacomo.mattei@grupposimtel.com>
 """
 
 import os
 import sys
+import json
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -31,66 +35,102 @@ except ImportError:
 # ─── Config ───────────────────────────────────────────────────────────
 
 DEFAULTS = {
-    "IP": "192.168.1.100",
-    "PORT": "502",
-    "MAX_RELAYS": "7",
-    "MAX_IN": "7",
-    "COIL_OFFSET_RELAYS": "0",
-    "COIL_OFFSET_INPUTS": "0",
-    "MODE_REG_BASE": "4096",
+    "ip": "192.168.1.100",
+    "port": 502,
+    "max_relays": 7,
+    "max_in": 7,
+    "coil_offset_relays": 0,
+    "coil_offset_inputs": 0,
+    "mode_reg_base": 4096,
 }
 
 ALL_RELAYS_COIL = 255  # coil broadcast Waveshare: scrive tutti i relè
 
 
-def load_config(conf_path):
-    """Legge mp_manager.conf (formato KEY=value, # = commento)."""
+def load_devices_json(path):
+    """Legge devices.json e ritorna una lista di dict dispositivo."""
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    devices = data.get("devices", [])
+    result = []
+    for d in devices:
+        dev = dict(DEFAULTS)
+        dev.update(d)
+        # relays: lista di nomi (può essere vuota o parziale)
+        dev.setdefault("relays", [])
+        result.append(dev)
+    return result
+
+
+def load_legacy_conf(path):
+    """Legge mp_manager.conf (formato KEY=value) — singolo dispositivo."""
     cfg = dict(DEFAULTS)
-    found = os.path.isfile(conf_path)
+    found = os.path.isfile(path)
     if not found:
+        cfg["name"] = "Dispositivo"
+        cfg["relays"] = []
         return cfg, False
-    with open(conf_path, "r") as f:
+    with open(path, "r") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
             if "=" in line:
                 key, _, val = line.partition("=")
-                key = key.strip()
+                key = key.strip().lower()
                 val = val.strip()
-                # rimuove commenti inline
                 if "#" in val:
                     val = val.split("#")[0].strip()
+                # conversioni tipo
+                if key in ("port", "max_relays", "max_in",
+                           "coil_offset_relays", "coil_offset_inputs",
+                           "mode_reg_base"):
+                    try:
+                        val = int(val)
+                    except ValueError:
+                        pass
                 if key:
                     cfg[key] = val
+    cfg.setdefault("name", f"{cfg['ip']}:{cfg['port']}")
+    cfg.setdefault("relays", [])
     return cfg, True
 
 
-# ─── GUI ──────────────────────────────────────────────────────────────
+# ─── Colori ───────────────────────────────────────────────────────────
 
-# Colori
-ON_BG = "#1e8e3e"        # verde acceso
+ON_BG = "#1e8e3e"
 ON_FG = "#ffffff"
-OFF_BG = "#3c4043"       # grigio scuro
+OFF_BG = "#3c4043"
 OFF_FG = "#9aa0a6"
-UNKNOWN_BG = "#5f6368"   # grigio medio
+UNKNOWN_BG = "#5f6368"
 UNKNOWN_FG = "#cccccc"
 HDR_CONN = "#1e8e3e"
 HDR_DISC = "#cc3333"
 HDR_WARN = "#cc9933"
 
 
-class RelayApp:
-    def __init__(self, root, conf_path):
-        self.root = root
-        self.conf_path = conf_path
-        self.cfg, conf_found = load_config(conf_path)
+# ─── DevicePanel ──────────────────────────────────────────────────────
 
-        self.ip = self.cfg["IP"]
-        self.port = int(self.cfg["PORT"])
-        self.max_relays = int(self.cfg["MAX_RELAYS"])
-        self.coil_offset = int(self.cfg["COIL_OFFSET_RELAYS"])
+class DevicePanel(ttk.Frame):
+    """Pannello relè per un singolo dispositivo Modbus TCP."""
+
+    def __init__(self, parent, device_cfg):
+        super().__init__(parent)
+        self.ip = device_cfg["ip"]
+        self.port = int(device_cfg["port"])
+        self.max_relays = int(device_cfg["max_relays"])
+        self.coil_offset = int(device_cfg.get("coil_offset_relays", 0))
         self.num_relays = self.max_relays + 1  # 0-based
+        self.dev_name = device_cfg.get("name", f"{self.ip}:{self.port}")
+
+        # Nomi relè: usa quelli forniti, fallback a R0, R1, ...
+        relay_names = device_cfg.get("relays", [])
+        self.relay_labels = []
+        for i in range(self.num_relays):
+            if i < len(relay_names) and relay_names[i].strip():
+                self.relay_labels.append(relay_names[i].strip())
+            else:
+                self.relay_labels.append(f"R{i}")
 
         self.client = None
         self.relay_states = [None] * self.num_relays
@@ -98,40 +138,23 @@ class RelayApp:
         self.pulse_mode = tk.BooleanVar(value=False)
         self.pulse_duration = tk.StringVar(value="2.0")
         self._refresh_job = None
-        self._pulsing = set()  # relè attualmente in pulse (bottoni disabilitati)
+        self._pulsing = set()
 
         self._build_ui()
-
-        if not conf_found:
-            messagebox.showwarning(
-                "Config non trovato",
-                f"File '{os.path.basename(conf_path)}' non trovato.\n"
-                f"Uso valori di default (IP {self.ip}:{self.port}).\n"
-                f"Copia mp_manager.conf nella stessa cartella dello script.",
-            )
-
         self._connect()
         self._refresh_status()
 
     # ── UI ────────────────────────────────────────────────────────────
 
     def _build_ui(self):
-        self.root.title("MP Manager — Waveshare Modbus Relay")
-        self.root.resizable(False, False)
-
-        style = ttk.Style()
-        try:
-            style.theme_use("vista")
-        except tk.TclError:
-            pass
-
         # Header
-        header = ttk.Frame(self.root, padding=10)
+        header = ttk.Frame(self, padding=10)
         header.grid(row=0, column=0, sticky="ew")
 
         ttk.Label(header, text="Dispositivo:").grid(row=0, column=0, sticky="w")
         self.lbl_device = ttk.Label(
-            header, text=f"{self.ip}:{self.port}", font=("Segoe UI", 10, "bold")
+            header, text=f"{self.ip}:{self.port}",
+            font=("Segoe UI", 10, "bold")
         )
         self.lbl_device.grid(row=0, column=1, sticky="w", padx=(4, 16))
 
@@ -144,7 +167,7 @@ class RelayApp:
         self.lbl_status.grid(row=0, column=3, padx=(16, 0))
 
         # Relè
-        relay_frame = ttk.LabelFrame(self.root, text="Relè", padding=10)
+        relay_frame = ttk.LabelFrame(self, text="Relè", padding=10)
         relay_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
         self.relay_buttons = []
@@ -153,10 +176,10 @@ class RelayApp:
             r, c = divmod(i, cols)
             btn = tk.Button(
                 relay_frame,
-                text=f"R{i}\n???",
-                width=8,
+                text=f"{self.relay_labels[i]}\n???",
+                width=10,
                 height=2,
-                font=("Consolas", 10, "bold"),
+                font=("Consolas", 9, "bold"),
                 relief="flat",
                 bd=0,
                 highlightthickness=0,
@@ -166,7 +189,7 @@ class RelayApp:
             self.relay_buttons.append(btn)
 
         # Bottom bar
-        bottom = ttk.Frame(self.root, padding=(10, 0, 10, 10))
+        bottom = ttk.Frame(self, padding=(10, 0, 10, 10))
         bottom.grid(row=2, column=0, sticky="ew")
 
         ttk.Button(bottom, text="Tutti ON", command=self._all_on).grid(row=0, column=0, padx=4)
@@ -175,7 +198,6 @@ class RelayApp:
                         variable=self.auto_refresh,
                         command=self._toggle_auto_refresh).grid(row=0, column=2, padx=(20, 0))
 
-        # Pulse mode
         ttk.Checkbutton(bottom, text="Pulse mode",
                         variable=self.pulse_mode).grid(row=0, column=3, padx=(20, 0))
         ttk.Label(bottom, text="Durata (s):").grid(row=0, column=4, padx=(8, 2))
@@ -185,7 +207,6 @@ class RelayApp:
     # ── Modbus ────────────────────────────────────────────────────────
 
     def _connect(self):
-        """Apre la connessione Modbus TCP."""
         try:
             if self.client:
                 self.client.close()
@@ -201,14 +222,12 @@ class RelayApp:
             return False
 
     def _refresh_status(self):
-        """Legge lo stato di tutti i relè dal dispositivo."""
         if not self.client or not self.client.is_open:
             if not self._connect():
                 return
         try:
             bits = self.client.read_coils(self.coil_offset, self.num_relays)
             if bits is None:
-                # un retry
                 if not self._connect():
                     return
                 bits = self.client.read_coils(self.coil_offset, self.num_relays)
@@ -224,18 +243,18 @@ class RelayApp:
     def _update_button_colors(self):
         for i, state in enumerate(self.relay_states):
             btn = self.relay_buttons[i]
+            label = self.relay_labels[i]
             if state is None:
-                btn.config(text=f"R{i}\n???", bg=UNKNOWN_BG, fg=UNKNOWN_FG,
+                btn.config(text=f"{label}\n???", bg=UNKNOWN_BG, fg=UNKNOWN_FG,
                            activebackground=UNKNOWN_BG)
             elif state:
-                btn.config(text=f"R{i}\nON", bg=ON_BG, fg=ON_FG,
+                btn.config(text=f"{label}\nON", bg=ON_BG, fg=ON_FG,
                            activebackground=ON_BG)
             else:
-                btn.config(text=f"R{i}\nOFF", bg=OFF_BG, fg=OFF_FG,
+                btn.config(text=f"{label}\nOFF", bg=OFF_BG, fg=OFF_FG,
                            activebackground=OFF_BG)
 
     def _toggle_relay(self, num):
-        """Inverte on/off del relè num."""
         if not self.client or not self.client.is_open:
             if not self._connect():
                 return
@@ -253,16 +272,14 @@ class RelayApp:
             messagebox.showerror("Errore", f"Errore scrittura relè {num}:\n{e}")
 
     def _handle_relay_click(self, num):
-        """Gestisce il click su un relè: toggle o pulse in base alla modalità."""
         if num in self._pulsing:
-            return  # pulse già in corso su questo relè
+            return
         if self.pulse_mode.get():
             self._pulse_relay(num)
         else:
             self._toggle_relay(num)
 
     def _get_pulse_duration(self):
-        """Legge e valida la durata pulse dal campo di testo. Ritorna float o None."""
         try:
             duration = float(self.pulse_duration.get().replace(",", "."))
         except ValueError:
@@ -274,7 +291,6 @@ class RelayApp:
         return duration
 
     def _pulse_relay(self, num):
-        """Invia un pulse al relè num: ON, attende durata, OFF. Non bloccante."""
         duration = self._get_pulse_duration()
         if duration is None:
             return
@@ -287,12 +303,10 @@ class RelayApp:
             if not ok:
                 messagebox.showerror("Errore", f"Impossibile attivare il pulse sul relè {num}.")
                 return
-            # Stato ON + disabilita il bottone durante il pulse
             self.relay_states[num] = True
             self._pulsing.add(num)
-            self.relay_buttons[num].config(state="disabled", text=f"R{num}\nPULSE")
+            self.relay_buttons[num].config(state="disabled", text=f"{self.relay_labels[num]}\nPULSE")
             self._update_button_colors()
-            # Schedula lo spegnimento
             self.root.after(int(duration * 1000),
                             lambda: self._pulse_off(num, coil))
         except Exception as e:
@@ -300,7 +314,6 @@ class RelayApp:
             self._pulsing.discard(num)
 
     def _pulse_off(self, num, coil):
-        """Seconda fase del pulse: spegne il relè e riabilita il bottone."""
         try:
             self.client.write_single_coil(coil, False)
             self.relay_states[num] = False
@@ -344,11 +357,47 @@ class RelayApp:
             self._refresh_status()
             self._refresh_job = self.root.after(2000, self._auto_refresh_loop)
 
-    def on_close(self):
+    def cleanup(self):
+        """Chiude connessione e ferma auto-refresh."""
         if self._refresh_job:
-            self.root.after_cancel(self._refresh_job)
+            try:
+                self.root.after_cancel(self._refresh_job)
+            except Exception:
+                pass
+            self._refresh_job = None
         if self.client:
             self.client.close()
+
+
+# ─── MultiDeviceApp ───────────────────────────────────────────────────
+
+class MultiDeviceApp:
+    """App principale: legge la config, crea tab per ogni dispositivo."""
+
+    def __init__(self, root, devices):
+        self.root = root
+        self.panels = []
+
+        root.title("MP Manager — Waveshare Modbus Relay")
+        root.resizable(False, False)
+
+        style = ttk.Style()
+        try:
+            style.theme_use("vista")
+        except tk.TclError:
+            pass
+
+        self.notebook = ttk.Notebook(root)
+        self.notebook.grid(row=0, column=0, sticky="nsew")
+
+        for dev in devices:
+            panel = DevicePanel(self.notebook, dev)
+            self.notebook.add(panel, text=dev.get("name", f"{dev['ip']}:{dev['port']}"))
+            self.panels.append(panel)
+
+    def on_close(self):
+        for p in self.panels:
+            p.cleanup()
         self.root.destroy()
 
 
@@ -356,10 +405,53 @@ class RelayApp:
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    conf_path = os.path.join(script_dir, "mp_manager.conf")
+    devices_json = os.path.join(script_dir, "devices.json")
+    legacy_conf = os.path.join(script_dir, "mp_manager.conf")
+
+    devices = []
+    config_source = None
+
+    if os.path.isfile(devices_json):
+        try:
+            devices = load_devices_json(devices_json)
+            config_source = "devices.json"
+        except (json.JSONDecodeError, KeyError) as e:
+            messagebox.showerror(
+                "Errore config",
+                f"Errore lettura devices.json:\n{e}\n\n"
+                f"Verifica la sintassi JSON.",
+            )
+            sys.exit(1)
+    elif os.path.isfile(legacy_conf):
+        cfg, _ = load_legacy_conf(legacy_conf)
+        devices = [cfg]
+        config_source = "mp_manager.conf"
+    else:
+        # Nessun config: usa default singolo dispositivo
+        cfg = dict(DEFAULTS)
+        cfg["name"] = "Dispositivo (default)"
+        cfg["relays"] = []
+        devices = [cfg]
+        config_source = "default"
+
+    if not devices:
+        messagebox.showerror(
+            "Nessun dispositivo",
+            "Nessun dispositivo configurato in devices.json.",
+        )
+        sys.exit(1)
 
     root = tk.Tk()
-    app = RelayApp(root, conf_path)
+    app = MultiDeviceApp(root, devices)
+
+    if config_source == "default":
+        messagebox.showwarning(
+            "Config non trovato",
+            "Nessun devices.json o mp_manager.conf trovato.\n"
+            "Uso valori di default (192.168.1.100:502).\n"
+            "Copia devices.example.json come devices.json e configura i tuoi dispositivi.",
+        )
+
     root.protocol("WM_DELETE_WINDOW", app.on_close)
     root.mainloop()
 

@@ -2,6 +2,7 @@ CONTEXT.md
 #Python (Windows addon)
 __pycache__/
 *.pyc
+win/devices.json
 oldstuff/
 test.sh
 #Node
