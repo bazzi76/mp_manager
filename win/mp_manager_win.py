@@ -299,25 +299,31 @@ class DevicePanel(ttk.Frame):
             if not self._connect():
                 return
         coil = self.coil_offset + num
+        # Stato attuale → inverti per il pulse, poi ripristina
+        original_state = self.relay_states[num] if num < len(self.relay_states) else None
+        pulse_state = not original_state if original_state is not None else True
         try:
-            ok = self.client.write_single_coil(coil, True)
+            ok = self.client.write_single_coil(coil, bool(pulse_state))
             if not ok:
                 messagebox.showerror("Errore", f"Impossibile attivare il pulse sul relè {num}.")
                 return
-            self.relay_states[num] = True
+            self.relay_states[num] = pulse_state
             self._pulsing.add(num)
             self.relay_buttons[num].config(state="disabled", text=f"{self.relay_labels[num]}\nPULSE")
             self._update_button_colors()
+            # Dopo la durata, ripristina lo stato originale
             self.root.after(int(duration * 1000),
-                            lambda: self._pulse_off(num, coil))
+                            lambda: self._pulse_revert(num, coil, original_state))
         except Exception as e:
             messagebox.showerror("Errore", f"Errore pulse relè {num}:\n{e}")
             self._pulsing.discard(num)
 
-    def _pulse_off(self, num, coil):
+    def _pulse_revert(self, num, coil, original_state):
+        """Ripristina lo stato originale del relè dopo il pulse."""
+        revert_state = original_state if original_state is not None else False
         try:
-            self.client.write_single_coil(coil, False)
-            self.relay_states[num] = False
+            self.client.write_single_coil(coil, bool(revert_state))
+            self.relay_states[num] = revert_state
         except Exception:
             pass
         finally:
