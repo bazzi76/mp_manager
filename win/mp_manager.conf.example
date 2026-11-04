@@ -1,0 +1,5 @@
+# mp_manager.conf.example
+IP=192.168.1.100
+PORT=502
+MAX_RELAYS=7
+MAX_IN=7
