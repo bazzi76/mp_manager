@@ -116,6 +116,7 @@ class DevicePanel(ttk.Frame):
 
     def __init__(self, parent, device_cfg):
         super().__init__(parent)
+        self.root = parent.winfo_toplevel()  # riferimento alla Tk root per after()
         self.ip = device_cfg["ip"]
         self.port = int(device_cfg["port"])
         self.max_relays = int(device_cfg["max_relays"])
