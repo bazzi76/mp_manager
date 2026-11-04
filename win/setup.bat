@@ -1,6 +1,5 @@
 @echo off
-chcp 65001 >nul 2>&1
-title MP Manager — Setup Wizard
+title MP Manager - Setup Wizard
 
 echo ============================================
 echo   MP Manager - Setup Wizard

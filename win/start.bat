@@ -1,13 +1,12 @@
 @echo off
-chcp 65001 >nul 2>&1
-title MP Manager — Waveshare Modbus Relay
+title MP Manager - Waveshare Modbus Relay
 
 echo ============================================
 echo   MP Manager - Avvio
 echo ============================================
 echo.
 
-REM ── Verifica Python ────────────────────────
+REM -- Verifica Python --
 where python >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERRORE] Python non trovato nel PATH.
@@ -17,14 +16,14 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-REM ── Verifica pyModbusTCP ───────────────────
+REM -- Verifica pyModbusTCP --
 python -c "import pyModbusTCP" >nul 2>&1
 if %errorlevel% neq 0 (
     echo [INFO] pyModbusTCP non installato. Installazione in corso...
     pip install pyModbusTCP
     if %errorlevel% neq 0 (
         echo [ERRORE] Installazione pyModbusTCP fallita.
-        echo          Prova manualmente:  pip install pyModbusTCP
+        echo          Prova manualmente: pip install pyModbusTCP
         echo.
         pause
         exit /b 1
@@ -33,7 +32,7 @@ if %errorlevel% neq 0 (
     echo.
 )
 
-REM ── Verifica devices.json ──────────────────
+REM -- Verifica devices.json --
 if not exist "%~dp0devices.json" (
     echo [INFO] devices.json non trovato.
     echo          Avvio wizard di configurazione guidata...
@@ -49,12 +48,11 @@ if not exist "%~dp0devices.json" (
     echo.
 )
 
-REM ── Avvio app ──────────────────────────────
+REM -- Avvio app --
 echo [OK] Avvio MP Manager...
 echo.
 python "%~dp0mp_manager_win.py"
 
-REM ── Se l'app chiude con errore, mantieni finestra aperta ──
 if %errorlevel% neq 0 (
     echo.
     echo [ERRORE] L'app si e' chiusa con codice errore %errorlevel%.

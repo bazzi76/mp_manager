@@ -59,9 +59,9 @@ def ask_ip(prompt, default=None):
 
 def configure_device(index):
     """Configura un singolo dispositivo e ritorna il dict."""
-    print(f"\n{'─'*50}")
+    print(f"\n{'-'*50}")
     print(f"  Dispositivo {index}")
-    print(f"{'─'*50}")
+    print(f"{'-'*50}")
 
     name = ask("  Nome dispositivo (es. 'Quadro Luci')", default=f"Dispositivo {index}")
     ip = ask_ip("  Indirizzo IP", default="192.168.1.100")
@@ -121,11 +121,11 @@ def main():
         json.dump(data, f, indent=2, ensure_ascii=False)
 
     print(f"\n{'='*50}")
-    print(f"  ✅ devices.json creato: {out_path}")
+    print(f"  [OK] devices.json creato: {out_path}")
     print(f"  Dispositivi configurati: {len(devices)}")
     for d in devices:
-        relays_info = f"{d['max_relays']+1} relè" if not d["relays"] else f"{len(d['relays'])} relè con nomi custom"
-        print(f"    • {d['name']} — {d['ip']}:{d['port']} — {relays_info}")
+        relays_info = f"{d['max_relays']+1} rele" if not d["relays"] else f"{len(d['relays'])} rele con nomi custom"
+        print(f"    - {d['name']} - {d['ip']}:{d['port']} - {relays_info}")
     print(f"\n  Puoi ora avviare l'app con:  start.bat")
     print(f"{'='*50}")
 
